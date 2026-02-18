@@ -315,19 +315,33 @@
 
                 for (let i = 0; i < gridData.length; i++) {
                     const entry = gridData[i];
-                    // Normalizing in case min/max are swapped
+                    
+                    // 1. FAST CHECK: Bounding Box
                     const minLat = Math.min(entry[0], entry[1]);
                     const maxLat = Math.max(entry[0], entry[1]);
                     const minLon = Math.min(entry[2], entry[3]);
                     const maxLon = Math.max(entry[2], entry[3]);
 
                     if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
-                        const pageName = entry[4];
-                        foundHtml += `
-                            <div class="grid-label">${gridName}</div>
-                            <div class="page-value">${pageName}</div>
-                        `;
-                        matchesFound = true;
+                        
+                        // 2. DETAILED CHECK: Polygon
+                        // entry[5] is the array of points. If it exists, check it.
+                        // If it is null/undefined, assume it's a rectangle and count as match.
+                        let isMatch = true;
+                        if (entry[5] && Array.isArray(entry[5])) {
+                            if (!isPointInPolygon(lat, lon, entry[5])) {
+                                isMatch = false;
+                            }
+                        }
+
+                        if (isMatch) {
+                            const pageName = entry[4];
+                            foundHtml += `
+                                <div class="grid-label">${gridName}</div>
+                                <div class="page-value">${pageName}</div>
+                            `;
+                            matchesFound = true;
+                        }
                     }
                 }
             });
@@ -340,6 +354,21 @@
         }
 
         // --- HELPERS ---
+
+// --- RAY CASTING ALGORITHM ---
+        function isPointInPolygon(lat, lon, polygon) {
+            let inside = false;
+            for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                const xi = polygon[i][0], yi = polygon[i][1];
+                const xj = polygon[j][0], yj = polygon[j][1];
+
+                const intersect = ((yi > lon) != (yj > lon)) &&
+                    (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+        
         function toDDM(val, isLat) {
             const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
             val = Math.abs(val);
