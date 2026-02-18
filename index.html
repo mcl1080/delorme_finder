@@ -30,32 +30,47 @@
             flex-grow: 1;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            padding: 20px;
-            padding-bottom: 60px; /* Add space at bottom so text clears the footer */
+            justify-content: flex-start; /* Moves everything to the TOP */
+            padding: 10px 0 60px 0;      /* Top 10px, Bottom 60px (for footer), Sides 0 */
+            width: 100%;
         }
 
         .coords-box {
             font-family: "Courier New", Courier, monospace;
             font-size: 1.2rem;
             color: #03dac6;
-            margin-bottom: 20px;
+            margin-top: 10px;      /* Small gap from header */
+            margin-bottom: 30px;   /* Gap between coords and result */
             background: #1e1e1e;
             padding: 10px;
             border-radius: 8px;
-            width: 90%;
+            width: 90%;            /* Keep coords contained, not full width */
             border: 1px solid #333;
         }
 
         .result-box {
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #ffffff;
-            min-height: 100px;
+            width: 100%;           /* Full Width */
+            text-align: center;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: center; /* Vertically center in the remaining space */
+            flex-grow: 1;            /* Take up all remaining space */
+        }
+
+        .grid-label {
+            font-size: 1.5rem;       /* Larger Label (e.g. "NorCal") */
+            color: #888;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .page-value {
+            font-size: 4.5rem;       /* HUGE TEXT for the Page Number */
+            font-weight: 800;        /* Extra Bold */
+            margin-bottom: 30px;     /* Space between multiple results */
+            line-height: 1;
         }
 
         .grid-label {
@@ -626,6 +641,7 @@
 </body>
 
 </html>
+
 
 
 
