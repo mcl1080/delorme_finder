@@ -171,8 +171,8 @@
             const acc = position.coords.accuracy;
 
             // Update Coords (DDM Format)
-            document.getElementById('latDisp').innerText = toDDM(lat, true);
-            document.getElementById('lonDisp').innerText = toDDM(lon, false);
+            document.getElementById('latDisp').innerHTML = toDDM(lat, true);
+            document.getElementById('lonDisp').innerHTML = toDDM(lon, false);
             
             // Update Accuracy in Footer
             document.getElementById('accuracy').innerText = `Acc: ±${Math.round(acc)}m`;
@@ -270,4 +270,5 @@
 
     </script>
 </body>
+
 </html>
