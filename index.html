@@ -15,24 +15,37 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
-            overflow: hidden; /* Prevents scrollbars */
+            overflow: hidden;
         }
 
         header {
             background-color: #1f1f1f;
             padding: 15px;
             border-bottom: 2px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
         h1 { margin: 0; font-size: 1.2rem; color: #bb86fc; }
+
+        /* Settings Button */
+        .settings-btn {
+            background: none;
+            border: none;
+            color: #e0e0e0;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0 10px;
+        }
 
         .container {
             flex-grow: 1;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: flex-start; /* Push content to top */
-            padding: 10px 0 60px 0;      /* Space for footer */
+            justify-content: flex-start;
+            padding: 10px 0 60px 0;
             width: 100%;
         }
 
@@ -58,21 +71,8 @@
             flex-grow: 1;
         }
 
-        .grid-label {
-            font-size: 1.5rem;
-            color: #888;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        .page-value {
-            font-size: 4.5rem;
-            font-weight: 800;
-            margin-bottom: 30px;
-            line-height: 1;
-            color: #ffffff;
-        }
+        .grid-label { font-size: 1.5rem; color: #888; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 2px; }
+        .page-value { font-size: 4.5rem; font-weight: 800; margin-bottom: 30px; line-height: 1; color: #ffffff; }
 
         footer {
             background-color: #1f1f1f;
@@ -90,6 +90,62 @@
             z-index: 1000;
         }
 
+        /* --- MENU OVERLAY STYLES --- */
+        .menu-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            z-index: 2000;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .menu-content {
+            background: #1e1e1e;
+            width: 85%;
+            max-width: 400px;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #333;
+        }
+
+        .menu-title { font-size: 1.5rem; color: #bb86fc; margin-bottom: 20px; }
+
+        .map-option {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            font-size: 1.2rem;
+        }
+
+        .map-option input { transform: scale(1.5); margin-right: 15px; }
+
+        .load-btn {
+            background-color: #bb86fc;
+            color: #000;
+            border: none;
+            padding: 15px;
+            width: 100%;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 5px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+
+        .close-btn {
+            background: transparent;
+            color: #888;
+            border: 1px solid #888;
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+            border-radius: 5px;
+        }
+
         .blink { animation: blinker 1s linear infinite; color: #03dac6; }
         @keyframes blinker { 50% { opacity: 0; } }
         .error { color: #cf6679; }
@@ -99,19 +155,30 @@
 <body>
 
     <header>
-        <h1>DeLorme Page Finder</h1>
+        <h1>DeLorme Finder</h1>
+        <button class="settings-btn" onclick="openMenu()">⚙️</button>
     </header>
 
     <div class="container">
-        <!-- Coordinates Display -->
         <div class="coords-box">
-            <div id="latDisp">Initializing...</div>
-            <div id="lonDisp"></div>
+            <div id="latDisp">Select Maps</div>
+            <div id="lonDisp">in Settings ⚙️</div>
         </div>
 
-        <!-- The Big Result Display -->
         <div id="resultContainer" class="result-box">
-            <span class="loading">Loading Maps...</span>
+            <span style="font-size: 1.2rem; color: #555;">No Maps Loaded</span>
+        </div>
+    </div>
+
+    <!-- MENU OVERLAY -->
+    <div id="menuOverlay" class="menu-overlay">
+        <div class="menu-content">
+            <div class="menu-title">Select Maps</div>
+            <div id="mapList">
+                <!-- Javascript will inject checkboxes here -->
+            </div>
+            <button class="load-btn" onclick="loadSelectedMaps()">LOAD MAPS</button>
+            <button class="close-btn" onclick="closeMenu()">Cancel</button>
         </div>
     </div>
 
@@ -122,40 +189,92 @@
     </footer>
 
     <script>
-        // --- CONFIGURATION: LIST YOUR FILES HERE ---
-        // These files must exist in the same folder (or GitHub repo)
-        const mapFiles = [
-            "norcal.json",
-            "socal.json",
-            "goldenstate.json" 
+        // --- 1. CONFIGURATION: MASTER LIST OF FILES ---
+        // 'file': must match your uploaded filename exactly
+        // 'label': what the user sees in the menu
+        const availableMapFiles = [
+            { file: "norcal.json", label: "Northern California" },
+            { file: "socal.json", label: "Southern California" },
+            { file: "goldenstate.json", label: "Golden State Grid" }
         ];
 
         // Global variable to store loaded data
         let gridCollections = [];
 
-        // --- 1. LOAD DATA ---
-        async function loadMaps() {
+        // --- 2. MENU LOGIC ---
+        function initMenu() {
+            const listDiv = document.getElementById('mapList');
+            let html = '';
+            
+            availableMapFiles.forEach((map, index) => {
+                // Check local storage to see if previously selected
+                const isChecked = localStorage.getItem(map.file) === 'true' ? 'checked' : '';
+                
+                html += `
+                    <label class="map-option">
+                        <input type="checkbox" id="map_${index}" value="${map.file}" ${isChecked}>
+                        ${map.label}
+                    </label>
+                `;
+            });
+            listDiv.innerHTML = html;
+        }
+
+        function openMenu() {
+            document.getElementById('menuOverlay').style.display = 'flex';
+        }
+
+        function closeMenu() {
+            document.getElementById('menuOverlay').style.display = 'none';
+        }
+
+        async function loadSelectedMaps() {
+            closeMenu();
+            const resultDiv = document.getElementById('resultContainer');
+            resultDiv.innerHTML = '<span class="loading">Loading...</span>';
+
+            const filesToLoad = [];
+            
+            // Find checked boxes
+            availableMapFiles.forEach((map, index) => {
+                const checkbox = document.getElementById(`map_${index}`);
+                if (checkbox.checked) {
+                    filesToLoad.push(map.file);
+                    localStorage.setItem(map.file, 'true'); // Save preference
+                } else {
+                    localStorage.setItem(map.file, 'false');
+                }
+            });
+
+            if (filesToLoad.length === 0) {
+                resultDiv.innerHTML = '<span style="color: #555;">No Maps Selected</span>';
+                gridCollections = [];
+                return;
+            }
+
+            // Fetch Data
             try {
-                const promises = mapFiles.map(file => fetch(file).then(res => {
-                    if (!res.ok) throw new Error(`Failed to load ${file}`);
+                const promises = filesToLoad.map(file => fetch(file).then(res => {
+                    if (!res.ok) throw new Error(`Failed: ${file}`);
                     return res.json();
                 }));
 
-                // Wait for all files to load
                 gridCollections = await Promise.all(promises);
                 
-                document.getElementById('resultContainer').innerHTML = 
-                    '<span style="font-size: 1.5rem; color: #555;">Waiting for GPS...</span>';
+                resultDiv.innerHTML = '<span style="font-size: 1.5rem; color: #555;">Waiting for GPS...</span>';
                 
-                startApp();
+                // If this is the first load, start GPS
+                if (!window.gpsStarted) {
+                    startApp();
+                    window.gpsStarted = true;
+                }
 
             } catch (err) {
-                document.getElementById('resultContainer').innerHTML = 
-                    `<span class="error">Error loading maps:<br>${err.message}</span>`;
+                resultDiv.innerHTML = `<span class="error">Error:<br>${err.message}</span>`;
             }
         }
 
-        // --- 2. GPS LOGIC ---
+        // --- 3. GPS LOGIC ---
         function startApp() {
             if ("geolocation" in navigator) {
                 navigator.geolocation.watchPosition(updateLocation, handleError, {
@@ -180,7 +299,9 @@
             document.getElementById('lonDisp').innerHTML = toDDM(lon, false);
             document.getElementById('accuracy').innerText = `Acc: ±${Math.round(acc)}m`;
 
-            findPages(lat, lon);
+            if (gridCollections.length > 0) {
+                findPages(lat, lon);
+            }
         }
 
         function findPages(lat, lon) {
@@ -188,24 +309,20 @@
             let foundHtml = "";
             let matchesFound = false;
 
-            // Loop through loaded collections
             gridCollections.forEach(collection => {
                 const gridName = collection.name;
                 const gridData = collection.data;
 
                 for (let i = 0; i < gridData.length; i++) {
                     const entry = gridData[i];
-                    // entry format: [latA, latB, lonA, lonB, "Name"]
-                    
+                    // Normalizing in case min/max are swapped
                     const minLat = Math.min(entry[0], entry[1]);
                     const maxLat = Math.max(entry[0], entry[1]);
                     const minLon = Math.min(entry[2], entry[3]);
                     const maxLon = Math.max(entry[2], entry[3]);
 
-                    // Bounding Box Check
                     if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
                         const pageName = entry[4];
-                        
                         foundHtml += `
                             <div class="grid-label">${gridName}</div>
                             <div class="page-value">${pageName}</div>
@@ -256,8 +373,10 @@
             } catch (err) { console.log("Wake Lock error:", err); }
         }
 
-        // START LOADING
-        loadMaps();
+        // Initialize Menu on Load
+        initMenu();
+        // Automatically try to load if user had maps selected previously
+        loadSelectedMaps();
 
     </script>
 </body>
