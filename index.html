@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeLorme Finder</title>
+    <style>
+        /* --- CSS STYLES (Dark Mode for Outdoors) --- */
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            justify-content: space-between;
+        }
+
+        header {
+            background-color: #1f1f1f;
+            padding: 15px;
+            border-bottom: 2px solid #333;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; color: #bb86fc; }
+
+        .container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .coords-box {
+            font-family: "Courier New", Courier, monospace;
+            font-size: 1.2rem;
+            color: #03dac6;
+            margin-bottom: 20px;
+            background: #1e1e1e;
+            padding: 10px;
+            border-radius: 8px;
+            width: 90%;
+            border: 1px solid #333;
+        }
+
+        .result-box {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #ffffff;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .grid-label {
+            font-size: 1rem;
+            color: #888;
+            margin-bottom: -5px;
+            text-transform: uppercase;
+        }
+
+        .page-value {
+            margin-bottom: 15px;
+        }
+
+        footer {
+            background-color: #1f1f1f;
+            padding: 10px;
+            font-size: 0.8rem;
+            color: #888;
+            border-top: 2px solid #333;
+            display: flex;
+            justify-content: space-between;
+            padding-left: 20px;
+            padding-right: 20px;
+        }
+
+        /* Blinking dot for heartbeat */
+        .blink { animation: blinker 1s linear infinite; color: #03dac6; }
+        @keyframes blinker { 50% { opacity: 0; } }
+        
+        .error { color: #cf6679; font-size: 1rem; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>DeLorme Page Finder</h1>
+    </header>
+
+    <div class="container">
+        <!-- Coordinates Display -->
+        <div class="coords-box">
+            <div id="latDisp">Waiting for GPS...</div>
+            <div id="lonDisp">Make sure Location is ON</div>
+        </div>
+
+        <!-- The Big Result Display -->
+        <div id="resultContainer" class="result-box">
+            <!-- Results will be injected here -->
+            <span style="font-size: 1.2rem; color: #555;">Scanning...</span>
+        </div>
+    </div>
+
+    <footer>
+        <span id="accuracy">Acc: -- m</span>
+        <span id="clock">--:--:--</span>
+        <span><span id="heartbeat" class="blink">●</span></span>
+    </footer>
+
+    <script>
+        // --- 1. PASTE YOUR DATA HERE ---
+        // Format: [lat1, lat2, lon1, lon2, "PageName"]
+        // Note: Order of lat/lon min/max doesn't matter, code fixes it automatically.
+
+        const norcalGrid = [
+            [42.009722, 41.5, -123.9375, -124.375, "Page 022"],
+            [42.009722, 41.5, -123.5, -123.9375, "Page 023"]
+            // ... Paste the rest of your NorCal data here ...
+        ];
+
+        const socalGrid = [
+            [37.000000, 36.500000, -121.812500, -122.250000, "Page 18"],
+            [37.000000, 36.500000, -121.375000, -121.812500, "Page 19"]
+            // ... Paste the rest of your SoCal data here ...
+        ];
+
+        const goldenStateGrid = [
+            [42.008330, 41.366670, -123.850000, -124.433330, "Page 022"],
+            [42.008330, 41.366670, -123.266670, -123.850000, "Page 023"]
+             // ... Paste the rest of your Golden State data here ...
+        ];
+
+        // Combine them into a manageable object
+        const gridCollections = [
+            { name: "NorCal", data: norcalGrid },
+            { name: "SoCal", data: socalGrid },
+            { name: "GoldenState", data: goldenStateGrid }
+        ];
+
+
+        // --- 2. THE LOGIC ---
+
+        function startApp() {
+            if ("geolocation" in navigator) {
+                // Request high accuracy GPS
+                navigator.geolocation.watchPosition(updateLocation, handleError, {
+                    enableHighAccuracy: true,
+                    timeout: 5000,
+                    maximumAge: 0
+                });
+            } else {
+                document.getElementById('latDisp').innerText = "GPS Not Supported";
+            }
+            
+            // Start the clock
+            setInterval(updateClock, 1000);
+            
+            // Keep screen awake (Modern browsers only)
+            requestWakeLock();
+        }
+
+        function updateLocation(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            const acc = position.coords.accuracy;
+
+            // Update Coords (DDM Format)
+            document.getElementById('latDisp').innerText = toDDM(lat, true);
+            document.getElementById('lonDisp').innerText = toDDM(lon, false);
+            
+            // Update Accuracy in Footer
+            document.getElementById('accuracy').innerText = `Acc: ±${Math.round(acc)}m`;
+
+            // Find Pages
+            findPages(lat, lon);
+        }
+
+        function findPages(lat, lon) {
+            const resultDiv = document.getElementById('resultContainer');
+            let foundHtml = "";
+            let matchesFound = false;
+
+            // Loop through every Grid Collection (NorCal, SoCal, etc)
+            gridCollections.forEach(collection => {
+                const gridName = collection.name;
+                const gridData = collection.data;
+
+                // Loop through every page in that grid
+                for (let i = 0; i < gridData.length; i++) {
+                    const entry = gridData[i];
+                    // entry format: [latA, latB, lonA, lonB, "PageName"]
+                    
+                    // Normalize Min/Max
+                    const minLat = Math.min(entry[0], entry[1]);
+                    const maxLat = Math.max(entry[0], entry[1]);
+                    const minLon = Math.min(entry[2], entry[3]);
+                    const maxLon = Math.max(entry[2], entry[3]);
+
+                    // Check Bounding Box
+                    if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
+                        const pageName = entry[4];
+                        
+                        // Add to output
+                        foundHtml += `
+                            <div class="grid-label">${gridName}</div>
+                            <div class="page-value">${pageName}</div>
+                        `;
+                        matchesFound = true;
+                    }
+                }
+            });
+
+            if (matchesFound) {
+                resultDiv.innerHTML = foundHtml;
+                resultDiv.style.color = "#ffffff"; // White text for success
+            } else {
+                resultDiv.innerHTML = '<span style="font-size: 1.5rem; color: #555;">No Page Found</span>';
+            }
+        }
+
+        // --- Helpers ---
+
+        function toDDM(val, isLat) {
+            const dir = isLat ? (val >= 0 ? 'N' : 'S') : (val >= 0 ? 'E' : 'W');
+            val = Math.abs(val);
+            const deg = Math.floor(val);
+            const min = (val - deg) * 60;
+            
+            // Padding logic for alignment
+            let degStr = deg.toString();
+            if (deg < 100) degStr = "&nbsp;" + degStr;
+            if (deg < 10) degStr = "&nbsp;" + degStr;
+
+            let minStr = min.toFixed(3);
+            if (min < 10) minStr = "0" + minStr;
+
+            return `${dir} ${degStr} ${minStr}`;
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+            document.getElementById('clock').innerText = timeStr;
+        }
+
+        function handleError(error) {
+            document.getElementById('latDisp').innerHTML = "<span class='error'>GPS Error</span>";
+            document.getElementById('lonDisp').innerText = error.message;
+        }
+        
+        // Helper to keep phone screen on
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                console.log("Wake Lock error:", err);
+            }
+        }
+
+        // Run on load
+        startApp();
+
+    </script>
+</body>
+</html>
