@@ -109,9 +109,27 @@
             border-radius: 10px;
             padding: 20px;
             border: 1px solid #333;
+            
+            /* --- CHANGES TO FIX SCROLLING --- */
+            max-height: 80vh;       /* Limit height to 80% of screen */
+            display: flex;          /* Turn into a flex container */
+            flex-direction: column; /* Stack items vertically */
         }
 
-        .menu-title { font-size: 1.5rem; color: #bb86fc; margin-bottom: 20px; }
+        #mapList {
+            overflow-y: auto;       /* Enable scrolling inside this box */
+            flex-grow: 1;           /* Expand to fill available space */
+            margin-bottom: 15px;    /* Space between list and buttons */
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #333;
+        }
+
+        .menu-title { 
+            font-size: 1.5rem; 
+            color: #bb86fc; 
+            margin-bottom: 10px; /* Reduced from 20px */
+            flex-shrink: 0;      /* Prevent title from squishing */
+        }
 
         .map-option {
             display: flex;
@@ -460,6 +478,7 @@
     </script>
 </body>
 </html>
+
 
 
 
