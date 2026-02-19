@@ -115,7 +115,6 @@
         const dropZone = document.getElementById('dropZone');
         const fileElem = document.getElementById('fileElem');
 
-        // Prevent default browser behaviors
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             dropZone.addEventListener(eventName, preventDefaults, false);
             document.body.addEventListener(eventName, preventDefaults, false);
@@ -126,7 +125,6 @@
             e.stopPropagation();
         }
 
-        // Highlight drop zone
         ['dragenter', 'dragover'].forEach(eventName => {
             dropZone.addEventListener(eventName, () => dropZone.classList.add('hover'), false);
         });
@@ -134,7 +132,6 @@
             dropZone.addEventListener(eventName, () => dropZone.classList.remove('hover'), false);
         });
 
-        // Handle File Drop
         dropZone.addEventListener('drop', handleDrop, false);
         fileElem.addEventListener('change', function(e) {
             handleFiles(this.files);
@@ -150,7 +147,7 @@
             if (files.length === 0) return;
 
             document.getElementById('statusText').innerText = "Processing...";
-            currentDataObj.data = []; // Reset data array
+            currentDataObj.data = []; 
             
             let detectedState = "";
             let processedCount = 0;
@@ -161,6 +158,7 @@
                     reader.onload = (e) => {
                         const result = processSingleFile(file.name, e.target.result);
                         if (result) {
+                            // Only capture state from the first valid file to avoid overwrite issues
                             if (!detectedState && result.state) detectedState = result.state;
                             currentDataObj.data.push(result.entry);
                             processedCount++;
@@ -171,15 +169,18 @@
                 });
             });
 
-            // Wait for all files to be read
             await Promise.all(promises);
 
-            // Update UI
+            // Set Group Name: Use detected state, replace underscores with spaces
             if (detectedState) {
-                document.getElementById('txtGroup').value = detectedState.trim() + " Counties";
-                currentDataObj.name = detectedState.trim() + " Counties";
+                const cleanState = detectedState.replace(/_/g, " ").trim();
+                document.getElementById('txtGroup').value = cleanState;
+                currentDataObj.name = cleanState;
             }
             
+            // Sort data alphabetically by name (Entry[4])
+            currentDataObj.data.sort((a, b) => a[4].localeCompare(b[4]));
+
             document.getElementById('fileCount').innerText = `Files Processed: ${processedCount}`;
             document.getElementById('statusText').innerText = "Done!";
             
@@ -188,26 +189,34 @@
 
         // --- PARSING LOGIC ---
         function processSingleFile(filename, csvContent) {
-            // 1. Parse Name
-            // Expected: California_Solano_County.csv
-            const cleanName = filename.replace(/\.csv|\.txt/gi, "");
-            const parts = cleanName.split('_');
+            // 1. Remove extension
+            let cleanName = filename.replace(/\.csv|\.txt/gi, "");
             
             let state = "";
-            let countyName = cleanName; // Default backup
+            let countyName = cleanName;
+
+            const parts = cleanName.split('_');
 
             if (parts.length >= 2) {
-                state = parts[0]; // "California"
+                state = parts[0]; // First part is State (e.g. "California")
                 
-                // Logic: Remove the State from the beginning, remove "County" from end?
-                // Or just replace underscores with spaces.
-                // Let's try to extract just the middle part if format matches standard.
+                // Remove State from the beginning
+                // Slice(1) removes the first element
+                let nameParts = parts.slice(1);
                 
-                // Remove State name from parts array
-                const nameParts = parts.slice(1); 
-                countyName = nameParts.join(" "); // "Solano County"
+                // Rejoin temporarily to do regex replacement
+                let tempName = nameParts.join("_");
+                
+                // Remove "County" or "Counties" from the end (case insensitive)
+                // Looks for _County at end, or just County at end
+                tempName = tempName.replace(/_?Count(y|ies)$/i, "");
+                
+                // Replace remaining underscores with spaces
+                countyName = tempName.replace(/_/g, " ");
+                
             } else {
-                countyName = cleanName;
+                // Fallback for files named simply "Solano_County.csv"
+                countyName = cleanName.replace(/_?Count(y|ies)$/i, "").replace(/_/g, " ");
             }
 
             // 2. Parse Points
@@ -248,7 +257,6 @@
 
         // --- OUTPUT UI ---
         function updateOutput() {
-            // Update the name in the object based on input box
             currentDataObj.name = document.getElementById('txtGroup').value;
             const jsonStr = JSON.stringify(currentDataObj, null, 2);
             document.getElementById('output').innerText = jsonStr;
@@ -256,7 +264,7 @@
 
         // --- UTILS ---
         function downloadFile() {
-            updateOutput(); // Ensure latest name is captured
+            updateOutput();
             const text = document.getElementById('output').innerText;
             if (currentDataObj.data.length === 0) {
                 alert("No data to download!");
@@ -289,7 +297,6 @@
             document.getElementById('statusText').innerText = "Ready";
         }
         
-        // Listen for group name changes to update JSON live
         document.getElementById('txtGroup').addEventListener('input', updateOutput);
 
     </script>
