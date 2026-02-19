@@ -371,7 +371,7 @@
 
             // Fetch Data
             try {
-                const promises = filesToLoad.map(file => fetch(file).then(res => {
+                const promises = filesToLoad.map(file => fetch("maps/" + file).then(res => {
                     if (!res.ok) throw new Error(`Failed: ${file}`);
                     return res.json();
                 }));
@@ -527,6 +527,7 @@
     </script>
 </body>
 </html>
+
 
 
 
