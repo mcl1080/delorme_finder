@@ -158,7 +158,6 @@
                     reader.onload = (e) => {
                         const result = processSingleFile(file.name, e.target.result);
                         if (result) {
-                            // Only capture state from the first valid file to avoid overwrite issues
                             if (!detectedState && result.state) detectedState = result.state;
                             currentDataObj.data.push(result.entry);
                             processedCount++;
@@ -171,14 +170,12 @@
 
             await Promise.all(promises);
 
-            // Set Group Name: Use detected state, replace underscores with spaces
             if (detectedState) {
-                const cleanState = detectedState.replace(/_/g, " ").trim();
-                document.getElementById('txtGroup').value = cleanState;
-                currentDataObj.name = cleanState;
+                document.getElementById('txtGroup').value = detectedState;
+                currentDataObj.name = detectedState;
             }
             
-            // Sort data alphabetically by name (Entry[4])
+            // Sort data alphabetically
             currentDataObj.data.sort((a, b) => a[4].localeCompare(b[4]));
 
             document.getElementById('fileCount').innerText = `Files Processed: ${processedCount}`;
@@ -189,7 +186,7 @@
 
         // --- PARSING LOGIC ---
         function processSingleFile(filename, csvContent) {
-            // 1. Remove extension
+            // Remove extension
             let cleanName = filename.replace(/\.csv|\.txt/gi, "");
             
             let state = "";
@@ -198,24 +195,28 @@
             const parts = cleanName.split('_');
 
             if (parts.length >= 2) {
-                state = parts[0]; // First part is State (e.g. "California")
+                const firstWord = parts[0];
+                const multiWordStates = ["New", "North", "South", "West", "Rhode"];
+                let splitIndex = 1;
+
+                // CHECK FOR 2-WORD STATES
+                if (multiWordStates.includes(firstWord) && parts.length >= 2) {
+                    state = parts[0] + " " + parts[1]; // e.g. "New York"
+                    splitIndex = 2; // County Name starts at index 2
+                } else {
+                    state = parts[0]; // e.g. "California"
+                    splitIndex = 1; // County Name starts at index 1
+                }
                 
-                // Remove State from the beginning
-                // Slice(1) removes the first element
-                let nameParts = parts.slice(1);
-                
-                // Rejoin temporarily to do regex replacement
+                // Get remaining parts for the county name
+                let nameParts = parts.slice(splitIndex);
                 let tempName = nameParts.join("_");
                 
-                // Remove "County" or "Counties" from the end (case insensitive)
-                // Looks for _County at end, or just County at end
+                // Clean up "County" and underscores
                 tempName = tempName.replace(/_?Count(y|ies)$/i, "");
-                
-                // Replace remaining underscores with spaces
                 countyName = tempName.replace(/_/g, " ");
                 
             } else {
-                // Fallback for files named simply "Solano_County.csv"
                 countyName = cleanName.replace(/_?Count(y|ies)$/i, "").replace(/_/g, " ");
             }
 
