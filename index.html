@@ -141,6 +141,17 @@
 
         .map-option input { transform: scale(1.5); margin-right: 15px; }
 
+        .deselect-btn {
+            background: transparent;
+            border: none;
+            color: #cf6679; /* Reddish text */
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-bottom: 5px;
+            align-self: flex-end; /* Pushes button to the right side */
+            text-decoration: underline;
+        }
+        
         .load-btn {
             background-color: #bb86fc;
             color: #000;
@@ -192,6 +203,7 @@
     <div id="menuOverlay" class="menu-overlay">
         <div class="menu-content">
             <div class="menu-title">Select Maps</div>
+            <button class="deselect-btn" onclick="deselectAll()">Uncheck All</button>
             <div id="mapList">
                 <!-- Javascript will inject checkboxes here -->
             </div>
@@ -349,6 +361,16 @@
 
         function closeMenu() {
             document.getElementById('menuOverlay').style.display = 'none';
+        }
+
+        function deselectAll() {
+            // Loop through all map options and uncheck them
+            availableMapFiles.forEach((_, index) => {
+                const checkbox = document.getElementById(`map_${index}`);
+                if (checkbox) {
+                    checkbox.checked = false;
+                }
+            });
         }
 
         async function loadSelectedMaps() {
