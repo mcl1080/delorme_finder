@@ -109,26 +109,76 @@
             border-radius: 10px;
             padding: 20px;
             border: 1px solid #333;
-            
-            /* --- CHANGES TO FIX SCROLLING --- */
-            max-height: 80vh;       /* Limit height to 80% of screen */
-            display: flex;          /* Turn into a flex container */
-            flex-direction: column; /* Stack items vertically */
-        }
-
-        #mapList {
-            overflow-y: auto;       /* Enable scrolling inside this box */
-            flex-grow: 1;           /* Expand to fill available space */
-            margin-bottom: 15px;    /* Space between list and buttons */
-            border-top: 1px solid #333;
-            border-bottom: 1px solid #333;
+            max-height: 80vh;       
+            display: flex;          
+            flex-direction: column; 
         }
 
         .menu-title { 
             font-size: 1.5rem; 
             color: #bb86fc; 
-            margin-bottom: 10px; /* Reduced from 20px */
-            flex-shrink: 0;      /* Prevent title from squishing */
+            margin-bottom: 10px; 
+            flex-shrink: 0;      
+        }
+
+        /* Auto Mode Toggle Row */
+        .auto-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            border: 1px solid #bb86fc;
+            flex-shrink: 0;
+        }
+        
+        .auto-label { font-size: 1rem; color: #ffffff; font-weight: bold; }
+
+        /* The Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+
+        .switch input { opacity: 0; width: 0; height: 0; }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider { background-color: #bb86fc; }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+
+        #mapList {
+            overflow-y: auto;       
+            flex-grow: 1;           
+            margin-bottom: 15px;    
+            border-top: 1px solid #333;
+            border-bottom: 1px solid #333;
         }
 
         .map-option {
@@ -144,12 +194,13 @@
         .deselect-btn {
             background: transparent;
             border: none;
-            color: #cf6679; /* Reddish text */
+            color: #cf6679; 
             font-size: 0.9rem;
             cursor: pointer;
             margin-bottom: 5px;
-            align-self: flex-end; /* Pushes button to the right side */
+            align-self: flex-end; 
             text-decoration: underline;
+            flex-shrink: 0;
         }
         
         .load-btn {
@@ -161,8 +212,9 @@
             font-size: 1.2rem;
             font-weight: bold;
             border-radius: 5px;
-            margin-top: 20px;
+            margin-top: 10px;
             cursor: pointer;
+            flex-shrink: 0;
         }
 
         .close-btn {
@@ -173,6 +225,7 @@
             width: 100%;
             margin-top: 10px;
             border-radius: 5px;
+            flex-shrink: 0;
         }
 
         .blink { animation: blinker 1s linear infinite; color: #03dac6; }
@@ -190,8 +243,8 @@
 
     <div class="container">
         <div class="coords-box">
-            <div id="latDisp">Select Maps</div>
-            <div id="lonDisp">in Settings ⚙️</div>
+            <div id="latDisp">Initializing...</div>
+            <div id="lonDisp"></div>
         </div>
 
         <div id="resultContainer" class="result-box">
@@ -202,13 +255,25 @@
     <!-- MENU OVERLAY -->
     <div id="menuOverlay" class="menu-overlay">
         <div class="menu-content">
-            <div class="menu-title">Select Maps</div>
-            <button class="deselect-btn" onclick="deselectAll()">Uncheck All</button>
+            <div class="menu-title">Settings</div>
+            
+            <!-- AUTO TOGGLE -->
+            <div class="auto-row">
+                <span class="auto-label">Auto-Load State</span>
+                <label class="switch">
+                    <input type="checkbox" id="autoToggle" onchange="toggleAutoMode()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <button class="deselect-btn" id="deselectBtn" onclick="deselectAll()">Uncheck All</button>
+            
             <div id="mapList">
                 <!-- Javascript will inject checkboxes here -->
             </div>
-            <button class="load-btn" onclick="loadSelectedMaps()">LOAD</button>
-            <button class="close-btn" onclick="closeMenu()">Cancel</button>
+            
+            <button class="load-btn" id="loadBtn" onclick="loadSelectedMaps()">LOAD SELECTED</button>
+            <button class="close-btn" onclick="closeMenu()">Close</button>
         </div>
     </div>
 
@@ -219,132 +284,146 @@
     </footer>
 
     <script>
-        // --- 1. CONFIGURATION: MASTER LIST OF FILES ---
-        // 'file': must match your uploaded filename exactly
-        // 'label': what the user sees in the menu
+        // --- 1. CONFIGURATION ---
+        // 'codes': array of state codes that this file belongs to. Used for Auto Mode.
         const availableMapFiles = [
-            { file: "alabama.json", label: "Alabama Counties" },
-            { file: "AL.json", label: "Alabama Delorme" },
-            { file: "alaska.json", label: "Alaska Counties" },
-            { file: "AK.json", label: "Alaska Delorme" },
-            { file: "arizona.json", label: "Arizona Counties" },
-            { file: "AZ.json", label: "Arizona Delorme" },
-            { file: "arkansas.json", label: "Arkansas Counties" },
-            { file: "AR.json", label: "Arkansas Delorme" },
-            { file: "AR2.json", label: "Arkansas Delorme 2" },
-            { file: "california.json", label: "California Counties" },
-            { file: "CN.json", label: "NorCal Delorme" },
-            { file: "CS.json", label: "SoCal Delorme" },
-            { file: "CA.json", label: "Golden State" },
-            { file: "colorado.json", label: "Colorado Counties" },
-            { file: "CO.json", label: "Colorado Delorme" },
-            { file: "connecticut.json", label: "Connecticut Counties" },
-            { file: "CT.json", label: "Connecticut Delorme" },
-            { file: "delaware.json", label: "Delaware Counties" },
-            { file: "DE.json", label: "Delaware Delorme" },
-            { file: "florida.json", label: "Florida Counties" },
-            { file: "FL.json", label: "Florida Delorme" },
-            { file: "FL2.json", label: "Florida Delorme 2" },
-            { file: "georgia.json", label: "Georgia Counties" },
-            { file: "GA.json", label: "Georgia Delorme" },
-            { file: "hawaii.json", label: "Hawaii Counties" },
-            { file: "HI.json", label: "Hawaii Delorme" },
-            { file: "idaho.json", label: "Idaho Counties" },
-            { file: "ID.json", label: "Idaho Delorme" },
-            { file: "illinois.json", label: "Illinois Counties" },
-            { file: "IL.json", label: "Illinois Delorme" },
-            { file: "indiana.json", label: "Indiana Counties" },
-            { file: "IN.json", label: "Indiana Delorme" },
-            { file: "iowa.json", label: "Iowa Counties" },
-            { file: "IA.json", label: "Iowa Delorme" },
-            { file: "kansas.json", label: "Kansas Counties" },
-            { file: "KS.json", label: "Kansas Delorme" },
-            { file: "kentucky.json", label: "Kentucky Counties" },
-            { file: "KY.json", label: "Kentucky Delorme" },
-            { file: "louisiana.json", label: "Louisiana Parishes" },
-            { file: "LA.json", label: "Louisiana Delorme" },
-            { file: "maine.json", label: "Maine Counties" },
-            { file: "ME.json", label: "Maine Delorme" },
-            { file: "maryland.json", label: "Maryland Counties" },
-            { file: "MD.json", label: "Maryland Delorme" },
-            { file: "massachusetts.json", label: "Massachusetts Counties" },
-            { file: "MA.json", label: "Massachusetts Delorme" },
-            { file: "michigan.json", label: "Michigan Counties" },
-            { file: "MI.json", label: "Michigan Delorme" },
-            { file: "minnesota.json", label: "Minnesota Counties" },
-            { file: "MN.json", label: "Minnesota Delorme" },
-            { file: "MN2.json", label: "Minnesota Delorme 2" },
-            { file: "mississippi.json", label: "Mississippi Counties" },
-            { file: "MS.json", label: "Mississippi Delorme" },
-            { file: "missouri.json", label: "Missouri Counties" },
-            { file: "MO.json", label: "Missouri Delorme" },
-            { file: "montana.json", label: "Montana Counties" },
-            { file: "MT.json", label: "Montana Delorme" },
-            { file: "nebraska.json", label: "Nebraska Counties" },
-            { file: "NE.json", label: "Nebraska Delorme" },
-            { file: "nevada.json", label: "Nevada Counties" },
-            { file: "NV.json", label: "Nevada Delorme" },
-            { file: "new_hampshire.json", label: "New Hampshire Counties" },
-            { file: "NH.json", label: "New Hampshire Delorme" },
-            { file: "new_jersey.json", label: "New Jersey Counties" },
-            { file: "NJ.json", label: "New Jersey Delorme" },
-            { file: "new_mexico.json", label: "New Mexico Counties" },
-            { file: "NM.json", label: "New Mexico Delorme" },
-            { file: "new_york.json", label: "New York Counties" },
-            { file: "NY.json", label: "New York Delorme" },
-            { file: "north_carolina.json", label: "North Carolina Counties" },
-            { file: "NC.json", label: "North Carolina Delorme" },
-            { file: "north_dakota.json", label: "North Dakota Counties" },
-            { file: "ND.json", label: "North Dakota Delorme" },
-            { file: "ohio.json", label: "Ohio Counties" },
-            { file: "OH.json", label: "Ohio Delorme" },
-            { file: "oklahoma.json", label: "Oklahoma Counties" },
-            { file: "OK.json", label: "Oklahoma Delorme" },
-            { file: "oregon.json", label: "Oregon Counties" },
-            { file: "OR.json", label: "Oregon Delorme" },
-            { file: "pennsylvania.json", label: "Pennsylvania Counties" },
-            { file: "PA.json", label: "Pennsylvania Delorme" },
-            { file: "rhode_island.json", label: "Rhode Island Counties" },
-            { file: "RI.json", label: "Rhode Island Delorme" },
-            { file: "south_carolina.json", label: "South Carolina Counties" },
-            { file: "SC.json", label: "South Carolina Delorme" },
-            { file: "south_dakota.json", label: "South Dakota Counties" },
-            { file: "SD.json", label: "South Dakota Delorme" },
-            { file: "tennessee.json", label: "Tennessee Counties" },
-            { file: "TN.json", label: "Tennessee Delorme" },
-            { file: "texas.json", label: "Texas Counties" },
-            { file: "TX.json", label: "Texas Delorme" },
-            { file: "utah.json", label: "Utah Counties" },
-            { file: "UT.json", label: "Utah Delorme" },
-            { file: "UT2.json", label: "Utah Delorme 2" },
-            { file: "vermont.json", label: "Vermont Counties" },
-            { file: "VT.json", label: "Vermont Delorme" },
-            { file: "virginia.json", label: "Virginia Counties" },
-            { file: "VA.json", label: "Virginia Delorme" },
-            { file: "washington.json", label: "Washington Counties" },
-            { file: "WA.json", label: "Washington Delorme" },
-            { file: "west_virginia.json", label: "West Virginia Counties" },
-            { file: "WV.json", label: "West Virginia Delorme" },
-            { file: "wisconsin.json", label: "Wisconsin Counties" },
-            { file: "WI.json", label: "Wisconsin Delorme" },
-            { file: "WI2.json", label: "Wisconsin Delorme 2" },
-            { file: "wyoming.json", label: "Wyoming Counties" },
-            { file: "WY.json", label: "Wyoming Delorme" },
-            { file: "WY2.json", label: "Wyoming Delorme 2" }
+            { file: "alabama.json", label: "Alabama Counties", codes: ["AL"] },
+            { file: "AL.json", label: "Alabama Delorme", codes: ["AL"] },
+            { file: "alaska.json", label: "Alaska Counties", codes: ["AK"] },
+            { file: "AK.json", label: "Alaska Delorme", codes: ["AK"] },
+            { file: "arizona.json", label: "Arizona Counties", codes: ["AZ"] },
+            { file: "AZ.json", label: "Arizona Delorme", codes: ["AZ"] },
+            { file: "arkansas.json", label: "Arkansas Counties", codes: ["AR"] },
+            { file: "AR.json", label: "Arkansas Delorme", codes: ["AR"] },
+            { file: "AR2.json", label: "Arkansas Delorme 2", codes: ["AR"] },
+            { file: "california.json", label: "California Counties", codes: ["CA"] },
+            { file: "CN.json", label: "NorCal Delorme", codes: ["CA"] },
+            { file: "CS.json", label: "SoCal Delorme", codes: ["CA"] },
+            { file: "CA.json", label: "Golden State", codes: ["CA"] },
+            { file: "colorado.json", label: "Colorado Counties", codes: ["CO"] },
+            { file: "CO.json", label: "Colorado Delorme", codes: ["CO"] },
+            { file: "connecticut.json", label: "Connecticut Counties", codes: ["CT"] },
+            { file: "CT.json", label: "Connecticut Delorme", codes: ["CT"] },
+            { file: "delaware.json", label: "Delaware Counties", codes: ["DE"] },
+            { file: "DE.json", label: "Delaware Delorme", codes: ["DE"] },
+            { file: "florida.json", label: "Florida Counties", codes: ["FL"] },
+            { file: "FL.json", label: "Florida Delorme", codes: ["FL"] },
+            { file: "FL2.json", label: "Florida Delorme 2", codes: ["FL"] },
+            { file: "georgia.json", label: "Georgia Counties", codes: ["GA"] },
+            { file: "GA.json", label: "Georgia Delorme", codes: ["GA"] },
+            { file: "hawaii.json", label: "Hawaii Counties", codes: ["HI"] },
+            { file: "HI.json", label: "Hawaii Delorme", codes: ["HI"] },
+            { file: "idaho.json", label: "Idaho Counties", codes: ["ID"] },
+            { file: "ID.json", label: "Idaho Delorme", codes: ["ID"] },
+            { file: "illinois.json", label: "Illinois Counties", codes: ["IL"] },
+            { file: "IL.json", label: "Illinois Delorme", codes: ["IL"] },
+            { file: "indiana.json", label: "Indiana Counties", codes: ["IN"] },
+            { file: "IN.json", label: "Indiana Delorme", codes: ["IN"] },
+            { file: "iowa.json", label: "Iowa Counties", codes: ["IA"] },
+            { file: "IA.json", label: "Iowa Delorme", codes: ["IA"] },
+            { file: "kansas.json", label: "Kansas Counties", codes: ["KS"] },
+            { file: "KS.json", label: "Kansas Delorme", codes: ["KS"] },
+            { file: "kentucky.json", label: "Kentucky Counties", codes: ["KY"] },
+            { file: "KY.json", label: "Kentucky Delorme", codes: ["KY"] },
+            { file: "louisiana.json", label: "Louisiana Parishes", codes: ["LA"] },
+            { file: "LA.json", label: "Louisiana Delorme", codes: ["LA"] },
+            { file: "maine.json", label: "Maine Counties", codes: ["ME"] },
+            { file: "ME.json", label: "Maine Delorme", codes: ["ME"] },
+            { file: "maryland.json", label: "Maryland Counties", codes: ["MD"] },
+            { file: "MD.json", label: "Maryland Delorme", codes: ["MD"] },
+            { file: "massachusetts.json", label: "Massachusetts Counties", codes: ["MA"] },
+            { file: "MA.json", label: "Massachusetts Delorme", codes: ["MA"] },
+            { file: "michigan.json", label: "Michigan Counties", codes: ["MI"] },
+            { file: "MI.json", label: "Michigan Delorme", codes: ["MI"] },
+            { file: "minnesota.json", label: "Minnesota Counties", codes: ["MN"] },
+            { file: "MN.json", label: "Minnesota Delorme", codes: ["MN"] },
+            { file: "MN2.json", label: "Minnesota Delorme 2", codes: ["MN"] },
+            { file: "mississippi.json", label: "Mississippi Counties", codes: ["MS"] },
+            { file: "MS.json", label: "Mississippi Delorme", codes: ["MS"] },
+            { file: "missouri.json", label: "Missouri Counties", codes: ["MO"] },
+            { file: "MO.json", label: "Missouri Delorme", codes: ["MO"] },
+            { file: "montana.json", label: "Montana Counties", codes: ["MT"] },
+            { file: "MT.json", label: "Montana Delorme", codes: ["MT"] },
+            { file: "nebraska.json", label: "Nebraska Counties", codes: ["NE"] },
+            { file: "NE.json", label: "Nebraska Delorme", codes: ["NE"] },
+            { file: "nevada.json", label: "Nevada Counties", codes: ["NV"] },
+            { file: "NV.json", label: "Nevada Delorme", codes: ["NV"] },
+            { file: "new_hampshire.json", label: "New Hampshire Counties", codes: ["NH"] },
+            { file: "NH.json", label: "New Hampshire Delorme", codes: ["NH"] },
+            { file: "new_jersey.json", label: "New Jersey Counties", codes: ["NJ"] },
+            { file: "NJ.json", label: "New Jersey Delorme", codes: ["NJ"] },
+            { file: "new_mexico.json", label: "New Mexico Counties", codes: ["NM"] },
+            { file: "NM.json", label: "New Mexico Delorme", codes: ["NM"] },
+            { file: "new_york.json", label: "New York Counties", codes: ["NY"] },
+            { file: "NY.json", label: "New York Delorme", codes: ["NY"] },
+            { file: "north_carolina.json", label: "North Carolina Counties", codes: ["NC"] },
+            { file: "NC.json", label: "North Carolina Delorme", codes: ["NC"] },
+            { file: "north_dakota.json", label: "North Dakota Counties", codes: ["ND"] },
+            { file: "ND.json", label: "North Dakota Delorme", codes: ["ND"] },
+            { file: "ohio.json", label: "Ohio Counties", codes: ["OH"] },
+            { file: "OH.json", label: "Ohio Delorme", codes: ["OH"] },
+            { file: "oklahoma.json", label: "Oklahoma Counties", codes: ["OK"] },
+            { file: "OK.json", label: "Oklahoma Delorme", codes: ["OK"] },
+            { file: "oregon.json", label: "Oregon Counties", codes: ["OR"] },
+            { file: "OR.json", label: "Oregon Delorme", codes: ["OR"] },
+            { file: "pennsylvania.json", label: "Pennsylvania Counties", codes: ["PA"] },
+            { file: "PA.json", label: "Pennsylvania Delorme", codes: ["PA"] },
+            { file: "rhode_island.json", label: "Rhode Island Counties", codes: ["RI"] },
+            { file: "RI.json", label: "Rhode Island Delorme", codes: ["RI"] },
+            { file: "south_carolina.json", label: "South Carolina Counties", codes: ["SC"] },
+            { file: "SC.json", label: "South Carolina Delorme", codes: ["SC"] },
+            { file: "south_dakota.json", label: "South Dakota Counties", codes: ["SD"] },
+            { file: "SD.json", label: "South Dakota Delorme", codes: ["SD"] },
+            { file: "tennessee.json", label: "Tennessee Counties", codes: ["TN"] },
+            { file: "TN.json", label: "Tennessee Delorme", codes: ["TN"] },
+            { file: "texas.json", label: "Texas Counties", codes: ["TX"] },
+            { file: "TX.json", label: "Texas Delorme", codes: ["TX"] },
+            { file: "utah.json", label: "Utah Counties", codes: ["UT"] },
+            { file: "UT.json", label: "Utah Delorme", codes: ["UT"] },
+            { file: "UT2.json", label: "Utah Delorme 2", codes: ["UT"] },
+            { file: "vermont.json", label: "Vermont Counties", codes: ["VT"] },
+            { file: "VT.json", label: "Vermont Delorme", codes: ["VT"] },
+            { file: "virginia.json", label: "Virginia Counties", codes: ["VA"] },
+            { file: "VA.json", label: "Virginia Delorme", codes: ["VA"] },
+            { file: "washington.json", label: "Washington Counties", codes: ["WA"] },
+            { file: "WA.json", label: "Washington Delorme", codes: ["WA"] },
+            { file: "west_virginia.json", label: "West Virginia Counties", codes: ["WV"] },
+            { file: "WV.json", label: "West Virginia Delorme", codes: ["WV"] },
+            { file: "wisconsin.json", label: "Wisconsin Counties", codes: ["WI"] },
+            { file: "WI.json", label: "Wisconsin Delorme", codes: ["WI"] },
+            { file: "WI2.json", label: "Wisconsin Delorme 2", codes: ["WI"] },
+            { file: "wyoming.json", label: "Wyoming Counties", codes: ["WY"] },
+            { file: "WY.json", label: "Wyoming Delorme", codes: ["WY"] },
+            { file: "WY2.json", label: "Wyoming Delorme 2", codes: ["WY"] }
         ];
 
-        // Global variable to store loaded data
+        // Global variables
         let gridCollections = [];
+        let stateBoundaries = [];
+        let isAutoMode = false;
+        let currentlyLoadedStateCodes = [];
 
-        // --- 2. MENU LOGIC ---
+        // --- 2. STARTUP ---
+        
+        async function loadStateBoundaries() {
+            try {
+                const res = await fetch("maps/states.json");
+                if(res.ok) {
+                    const json = await res.json();
+                    stateBoundaries = json.data; 
+                    console.log("State boundaries loaded");
+                }
+            } catch (e) {
+                console.log("Could not load states.json");
+            }
+        }
+
         function initMenu() {
             const listDiv = document.getElementById('mapList');
             let html = '';
             
             availableMapFiles.forEach((map, index) => {
-                // Check local storage to see if previously selected
                 const isChecked = localStorage.getItem(map.file) === 'true' ? 'checked' : '';
-                
                 html += `
                     <label class="map-option">
                         <input type="checkbox" id="map_${index}" value="${map.file}" ${isChecked}>
@@ -355,6 +434,107 @@
             listDiv.innerHTML = html;
         }
 
+        // --- 3. AUTO MODE LOGIC ---
+
+        function toggleAutoMode() {
+            const toggle = document.getElementById('autoToggle');
+            isAutoMode = toggle.checked;
+            localStorage.setItem('isAutoMode', isAutoMode);
+            
+            // Visual feedback: Disable manual list if Auto is ON
+            const list = document.getElementById('mapList');
+            const loadBtn = document.getElementById('loadBtn');
+            const deselectBtn = document.getElementById('deselectBtn');
+
+            if (isAutoMode) {
+                list.style.opacity = "0.3";
+                list.style.pointerEvents = "none";
+                loadBtn.style.display = 'none'; 
+                deselectBtn.style.display = 'none';
+                
+                // Clear manual selection visually if desired, or just ignore it
+                closeMenu();
+                
+                // Trigger reset
+                currentlyLoadedStateCodes = []; 
+                document.getElementById('resultContainer').innerHTML = '<span class="loading">Auto Mode On<br>Waiting for GPS...</span>';
+            } else {
+                list.style.opacity = "1";
+                list.style.pointerEvents = "auto";
+                loadBtn.style.display = 'block';
+                deselectBtn.style.display = 'block';
+                
+                // Reload manual selection
+                loadSelectedMaps();
+            }
+        }
+
+        async function checkAutoLoad(lat, lon) {
+            if (!isAutoMode || stateBoundaries.length === 0) return;
+
+            // 1. Find which states we are in
+            const detectedCodes = [];
+            
+            for(let i=0; i<stateBoundaries.length; i++) {
+                const entry = stateBoundaries[i];
+                // entry: [minLat, maxLat, minLon, maxLon, "CODE", (optional poly)]
+                const minLat = Math.min(entry[0], entry[1]);
+                const maxLat = Math.max(entry[0], entry[1]);
+                const minLon = Math.min(entry[2], entry[3]);
+                const maxLon = Math.max(entry[2], entry[3]);
+
+                if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
+                    detectedCodes.push(entry[4]);
+                }
+            }
+
+            // 2. Compare with what is currently loaded
+            detectedCodes.sort();
+            const currentStr = currentlyLoadedStateCodes.sort().join(",");
+            const newStr = detectedCodes.join(",");
+
+            // 3. If different, LOAD files
+            if (currentStr !== newStr) {
+                console.log("State change detected: " + newStr);
+                currentlyLoadedStateCodes = detectedCodes;
+                
+                const resultDiv = document.getElementById('resultContainer');
+                
+                if (detectedCodes.length === 0) {
+                     gridCollections = [];
+                     resultDiv.innerHTML = '<span style="color:#555">No maps for this location</span>';
+                     return;
+                }
+
+                resultDiv.innerHTML = `<span class="loading">Entering ${newStr}...<br>Loading Maps</span>`;
+
+                // Find files that match these codes
+                const filesToLoad = [];
+                availableMapFiles.forEach(map => {
+                    if (map.codes) {
+                        const match = map.codes.some(c => detectedCodes.includes(c));
+                        if (match) filesToLoad.push(map.file);
+                    }
+                });
+
+                if (filesToLoad.length > 0) {
+                    try {
+                        const promises = filesToLoad.map(file => fetch("maps/" + file).then(res => res.json()));
+                        gridCollections = await Promise.all(promises);
+                        // Refresh display immediately
+                        findPages(lat, lon);
+                    } catch(e) {
+                         resultDiv.innerHTML = `<span class="error">Error loading auto maps</span>`;
+                    }
+                } else {
+                    gridCollections = [];
+                    resultDiv.innerHTML = '<span style="color:#555">No map files found for code: ' + newStr + '</span>';
+                }
+            }
+        }
+
+        // --- 4. MANUAL MENU FUNCTIONS ---
+
         function openMenu() {
             document.getElementById('menuOverlay').style.display = 'flex';
         }
@@ -364,7 +544,6 @@
         }
 
         function deselectAll() {
-            // Loop through all map options and uncheck them
             availableMapFiles.forEach((_, index) => {
                 const checkbox = document.getElementById(`map_${index}`);
                 if (checkbox) {
@@ -374,6 +553,8 @@
         }
 
         async function loadSelectedMaps() {
+            if (isAutoMode) return;
+
             closeMenu();
             const resultDiv = document.getElementById('resultContainer');
             resultDiv.innerHTML = '<span class="loading">Loading...</span>';
@@ -383,9 +564,9 @@
             // Find checked boxes
             availableMapFiles.forEach((map, index) => {
                 const checkbox = document.getElementById(`map_${index}`);
-                if (checkbox.checked) {
+                if (checkbox && checkbox.checked) {
                     filesToLoad.push(map.file);
-                    localStorage.setItem(map.file, 'true'); // Save preference
+                    localStorage.setItem(map.file, 'true'); 
                 } else {
                     localStorage.setItem(map.file, 'false');
                 }
@@ -397,7 +578,6 @@
                 return;
             }
 
-            // Fetch Data
             try {
                 const promises = filesToLoad.map(file => fetch("maps/" + file).then(res => {
                     if (!res.ok) throw new Error(`Failed: ${file}`);
@@ -405,10 +585,8 @@
                 }));
 
                 gridCollections = await Promise.all(promises);
-                
                 resultDiv.innerHTML = '<span style="font-size: 1.5rem; color: #555;">Waiting for GPS...</span>';
                 
-                // If this is the first load, start GPS
                 if (!window.gpsStarted) {
                     startApp();
                     window.gpsStarted = true;
@@ -419,7 +597,8 @@
             }
         }
 
-        // --- 3. GPS LOGIC ---
+        // --- 5. GPS LOGIC ---
+
         function startApp() {
             if ("geolocation" in navigator) {
                 navigator.geolocation.watchPosition(updateLocation, handleError, {
@@ -443,6 +622,10 @@
             document.getElementById('latDisp').innerHTML = toDDM(lat, true);
             document.getElementById('lonDisp').innerHTML = toDDM(lon, false);
             document.getElementById('accuracy').innerText = `Acc: ±${Math.round(acc)}m`;
+
+            if (isAutoMode) {
+                checkAutoLoad(lat, lon);
+            }
 
             if (gridCollections.length > 0) {
                 findPages(lat, lon);
@@ -470,8 +653,6 @@
                     if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
                         
                         // 2. DETAILED CHECK: Polygon
-                        // entry[5] is the array of points. If it exists, check it.
-                        // If it is null/undefined, assume it's a rectangle and count as match.
                         let isMatch = true;
                         if (entry[5] && Array.isArray(entry[5])) {
                             if (!isPointInPolygon(lat, lon, entry[5])) {
@@ -498,9 +679,8 @@
             }
         }
 
-        // --- HELPERS ---
+        // --- 6. HELPERS ---
 
-// --- RAY CASTING ALGORITHM ---
         function isPointInPolygon(lat, lon, polygon) {
             let inside = false;
             for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -547,27 +727,25 @@
             } catch (err) { console.log("Wake Lock error:", err); }
         }
 
-        // Initialize Menu on Load
+        // --- 7. INITIALIZATION ---
+
+        loadStateBoundaries();
         initMenu();
-        // Automatically try to load if user had maps selected previously
-        loadSelectedMaps();
+
+        // Restore Auto Mode preference
+        const savedAuto = localStorage.getItem('isAutoMode') === 'true';
+        document.getElementById('autoToggle').checked = savedAuto;
+        toggleAutoMode(); // Apply UI state
+        
+        // Only load manual maps on startup if Auto is OFF
+        if (!savedAuto) {
+            loadSelectedMaps();
+        } else {
+             // If auto is on, start GPS so we can detect state
+             startApp();
+             window.gpsStarted = true;
+        }
 
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
