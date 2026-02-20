@@ -232,6 +232,28 @@
         @keyframes blinker { 50% { opacity: 0; } }
         .error { color: #cf6679; }
         .loading { color: #bb86fc; font-size: 1.5rem; }
+
+        .status-dot { 
+            height: 10px; 
+            width: 10px; 
+            background-color: #03dac6; /* Teal color */
+            border-radius: 50%; 
+            margin-right: 15px; 
+            box-shadow: 0 0 5px #03dac6;
+        }
+        
+        .auto-item { 
+            color: #fff; 
+            cursor: default; 
+            opacity: 1 !important; /* Force opacity override */
+        }
+
+        .auto-empty {
+            padding: 20px;
+            text-align: center;
+            color: #888;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -419,6 +441,7 @@
         }
 
         function initMenu() {
+            // This now only renders the MANUAL checkbox list
             const listDiv = document.getElementById('mapList');
             let html = '';
             
@@ -434,38 +457,72 @@
             listDiv.innerHTML = html;
         }
 
-        // --- 3. AUTO MODE LOGIC ---
+        function renderAutoList() {
+            const listDiv = document.getElementById('mapList');
+            let html = '';
+            
+            // Filter the master list to find maps that match currently loaded State Codes
+            const activeMaps = availableMapFiles.filter(map => {
+                if (!map.codes) return false;
+                return map.codes.some(c => currentlyLoadedStateCodes.includes(c));
+            });
+
+            if (activeMaps.length === 0) {
+                html = '<div class="auto-empty">Waiting for GPS location...<br>or no maps for this area.</div>';
+            } else {
+                activeMaps.forEach(map => {
+                    html += `
+                        <div class="map-option auto-item">
+                            <span class="status-dot"></span>
+                            ${map.label}
+                        </div>
+                    `;
+                });
+            }
+            listDiv.innerHTML = html;
+        }
 
         function toggleAutoMode() {
             const toggle = document.getElementById('autoToggle');
             isAutoMode = toggle.checked;
             localStorage.setItem('isAutoMode', isAutoMode);
             
-            // Visual feedback: Disable manual list if Auto is ON
             const list = document.getElementById('mapList');
             const loadBtn = document.getElementById('loadBtn');
             const deselectBtn = document.getElementById('deselectBtn');
 
             if (isAutoMode) {
-                list.style.opacity = "0.3";
-                list.style.pointerEvents = "none";
+                // --- AUTO MODE UI ---
+                // 1. Restore opacity (it was dimmed in previous version)
+                list.style.opacity = "1";
+                list.style.pointerEvents = "auto";
+                
+                // 2. Hide manual buttons
                 loadBtn.style.display = 'none'; 
                 deselectBtn.style.display = 'none';
                 
-                // Clear manual selection visually if desired, or just ignore it
-                closeMenu();
+                // 3. Show "Active Maps" list instead of checkboxes
+                renderAutoList();
                 
-                // Trigger reset
-                currentlyLoadedStateCodes = []; 
-                document.getElementById('resultContainer').innerHTML = '<span class="loading">Auto Mode On<br>Waiting for GPS...</span>';
+                // 4. Trigger Auto Logic
+                if (!window.gpsStarted) {
+                    startApp();
+                    window.gpsStarted = true;
+                }
+                document.getElementById('resultContainer').innerHTML = '<span class="loading">Auto Mode On<br>Scanning...</span>';
+                
             } else {
-                list.style.opacity = "1";
-                list.style.pointerEvents = "auto";
+                // --- MANUAL MODE UI ---
                 loadBtn.style.display = 'block';
                 deselectBtn.style.display = 'block';
                 
-                // Reload manual selection
-                loadSelectedMaps();
+                // Restore Checkbox List
+                initMenu();
+                
+                // Clear Auto data
+                currentlyLoadedStateCodes = [];
+                gridCollections = []; // Clear maps until user hits Load
+                document.getElementById('resultContainer').innerHTML = '<span style="color:#555">Manual Mode<br>Select maps</span>';
             }
         }
 
@@ -523,6 +580,9 @@
                         gridCollections = await Promise.all(promises);
                         // Refresh display immediately
                         findPages(lat, lon);
+                        if(document.getElementById('menuOverlay').style.display === 'flex') {
+                        renderAutoList(); // Update menu if it's open
+                        }
                     } catch(e) {
                          resultDiv.innerHTML = `<span class="error">Error loading auto maps</span>`;
                     }
@@ -727,21 +787,29 @@
             } catch (err) { console.log("Wake Lock error:", err); }
         }
 
-        // --- 7. INITIALIZATION ---
+// --- 7. INITIALIZATION ---
 
         loadStateBoundaries();
-        initMenu();
 
-        // Restore Auto Mode preference
-        const savedAuto = localStorage.getItem('isAutoMode') === 'true';
-        document.getElementById('autoToggle').checked = savedAuto;
-        toggleAutoMode(); // Apply UI state
+        // 1. Check LocalStorage. If null (first visit), default to TRUE.
+        const savedSetting = localStorage.getItem('isAutoMode');
+        const savedAuto = savedSetting === null ? true : (savedSetting === 'true');
         
-        // Only load manual maps on startup if Auto is OFF
+        // 2. Apply Setting
+        document.getElementById('autoToggle').checked = savedAuto;
+        isAutoMode = savedAuto; // Set global immediately
+        
+        // 3. Initialize UI based on mode
+        toggleAutoMode(); 
+        
+        // 4. Start Logic
         if (!savedAuto) {
+            // Manual Mode: Load saved selection
+            initMenu();
             loadSelectedMaps();
         } else {
-             // If auto is on, start GPS so we can detect state
+             // Auto Mode: Start GPS immediately
+             initMenu(); // Pre-load structure
              startApp();
              window.gpsStarted = true;
         }
