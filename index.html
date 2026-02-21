@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1f1f1f">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeLorme Finder</title>
@@ -217,6 +219,18 @@
             flex-shrink: 0;
         }
 
+      .cache-btn {
+            background: transparent;
+            color: #03dac6;
+            border: 1px solid #03dac6;
+            padding: 10px;
+            width: 100%;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
         .close-btn {
             background: transparent;
             color: #888;
@@ -295,6 +309,8 @@
             </div>
             
             <button class="load-btn" id="loadBtn" onclick="loadSelectedMaps()">LOAD SELECTED</button>
+            <button class="cache-btn" onclick="downloadAllForOffline()">Download All Maps (Offline)</button>
+            <div id="downloadStatus" style="text-align: center; color: #03dac6; margin-top: 5px;"></div>
             <button class="close-btn" onclick="closeMenu()">Close</button>
         </div>
     </div>
@@ -797,6 +813,35 @@
             } catch (err) { console.log("Wake Lock error:", err); }
         }
 
+        async function downloadAllForOffline() {
+            const statusDiv = document.getElementById('downloadStatus');
+            statusDiv.innerText = "Starting download...";
+            
+            // 1. Get list of all URLs to fetch
+            const urlsToCache = [
+                "maps/states.json",
+                ...availableMapFiles.map(m => "maps/" + m.file)
+            ];
+
+            let count = 0;
+            const total = urlsToCache.length;
+
+            // 2. Fetch them one by one (Service Worker will capture and save them)
+            // We use a loop to avoid freezing the browser with 100 simultaneous requests
+            for (const url of urlsToCache) {
+                try {
+                    await fetch(url);
+                    count++;
+                    statusDiv.innerText = `Cached ${count} / ${total}`;
+                } catch (e) {
+                    console.log("Failed to cache " + url);
+                }
+            }
+            
+            statusDiv.innerText = "All Maps Saved Offline!";
+            setTimeout(() => { statusDiv.innerText = ""; }, 3000);
+        }
+
 // --- 7. INITIALIZATION ---
 
         loadStateBoundaries();
@@ -825,6 +870,12 @@
              window.gpsStarted = true;
         }
 
+// --- PWA SETUP ---
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log('Service Worker Registered'));
+        }
+      
     </script>
 </body>
 </html>
