@@ -12,7 +12,7 @@
       "type": "image/png"
     },
     {
-      "src": "https://via.placeholder.com/512/03dac6/000000?text=MAP",
+      "src": "./globe.png",
       "sizes": "512x512",
       "type": "image/png"
     }
