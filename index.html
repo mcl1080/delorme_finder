@@ -596,6 +596,16 @@
         // --- 4. MANUAL MENU FUNCTIONS ---
 
         function openMenu() {
+            // Force a refresh of the list every time the menu is opened
+            if (isAutoMode) {
+                renderAutoList();
+            } else {
+                // Optional: You can re-render manual list here if needed, 
+                // but usually manual list state is preserved in DOM.
+                // If you notice manual checkboxes resetting unexpectedly, 
+                // you can uncomment the line below:
+                // initMenu(); 
+            }
             document.getElementById('menuOverlay').style.display = 'flex';
         }
 
