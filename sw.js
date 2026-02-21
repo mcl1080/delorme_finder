@@ -6,7 +6,7 @@ const CORE_ASSETS = [
     './maps/states.json' 
 ];
 
-// 1. INSTALL: Cache the "skeleton" of the app immediately
+// 1. INSTALL
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -15,7 +15,7 @@ self.addEventListener('install', event => {
     );
 });
 
-// 2. ACTIVATE: Clean up old caches if you update version number
+// 2. ACTIVATE
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(keys => Promise.all(
@@ -26,28 +26,39 @@ self.addEventListener('activate', event => {
     );
 });
 
-// 3. FETCH: The "Offline Strategy"
-// Strategy: Stale-While-Revalidate
-// Try to serve from cache first (fastest/offline). 
-// Then try network to update the cache for next time.
+// 3. FETCH (Corrected Logic)
 self.addEventListener('fetch', event => {
-    // Only handle http/https requests
+    // Only handle http/https requests (ignores chrome-extension schemes)
     if (!event.request.url.startsWith('http')) return;
 
     event.respondWith(
         caches.match(event.request).then(cachedResponse => {
-            // Even if we have it in cache, try to fetch a fresh version in background
+            
+            // Create a network request to update the cache in the background
             const fetchPromise = fetch(event.request).then(networkResponse => {
-                // Save the fresh copy to cache
+                
+                // Check if we received a valid response
+                if (!networkResponse || networkResponse.status !== 200) {
+                    return networkResponse;
+                }
+
+                // IMPORTANT: Clone the response IMMEDIATELY.
+                // We need one copy for the browser (networkResponse)
+                // and one copy for the cache (responseToCache).
+                const responseToCache = networkResponse.clone();
+
                 caches.open(CACHE_NAME).then(cache => {
-                    cache.put(event.request, networkResponse.clone());
+                    cache.put(event.request, responseToCache);
                 });
+
                 return networkResponse;
-            }).catch(() => {
-                // Network failed? That's fine, we return cachedResponse later.
+            }).catch(err => {
+                // Network failed. If we have a cached response, the code below handles it.
+                // If we don't have a cached response, this request simply fails.
             });
 
-            // Return cached response immediately if available, else wait for network
+            // Return the cached response immediately if we have it, 
+            // otherwise wait for the network request to finish.
             return cachedResponse || fetchPromise;
         })
     );
