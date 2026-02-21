@@ -32,7 +32,24 @@
 
         h1 { margin: 0; font-size: 1.2rem; color: #bb86fc; }
 
-        /* Settings Button */
+        .header-buttons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .install-btn {
+            display: none; /* Hidden by default */
+            background-color: #03dac6;
+            color: #000;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
         .settings-btn {
             background: none;
             border: none;
@@ -275,7 +292,11 @@
 
     <header>
         <h1>DeLorme Finder</h1>
-        <button class="settings-btn" onclick="openMenu()">⚙️</button>
+        <div class="header-buttons">
+            <!-- Hidden by default, shown via JS if installable -->
+            <button id="installBtn" class="install-btn" onclick="installPWA()">⬇️ Install</button>
+            <button class="settings-btn" onclick="openMenu()">⚙️</button>
+        </div>
     </header>
 
     <div class="container">
@@ -842,6 +863,41 @@
             statusDiv.innerText = "All Maps Saved Offline!";
             setTimeout(() => { statusDiv.innerText = ""; }, 3000);
         }
+
+// --- PWA INSTALL LOGIC ---
+        let deferredPrompt;
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // 1. Prevent Chrome 67+ from automatically showing the prompt
+            e.preventDefault();
+            // 2. Stash the event so it can be triggered later
+            deferredPrompt = e;
+            // 3. Show the install button
+            document.getElementById('installBtn').style.display = 'block';
+        });
+
+        async function installPWA() {
+            if (!deferredPrompt) return;
+            
+            // Show the install prompt
+            deferredPrompt.prompt();
+            
+            // Wait for the user to respond to the prompt
+            const { outcome } = await deferredPrompt.userChoice;
+            console.log(`User response to install prompt: ${outcome}`);
+            
+            // We've used the prompt, and can't use it again, discard it
+            deferredPrompt = null;
+            
+            // Hide the button
+            document.getElementById('installBtn').style.display = 'none';
+        }
+
+        // Hide button if app is already installed (standalone mode)
+        window.addEventListener('appinstalled', () => {
+            document.getElementById('installBtn').style.display = 'none';
+            deferredPrompt = null;
+        });
 
 // --- 7. INITIALIZATION ---
 
