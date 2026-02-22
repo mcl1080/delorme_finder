@@ -829,11 +829,27 @@
             document.getElementById('lonDisp').innerText = error.message;
         }
         
+// --- WAKE LOCK LOGIC ---
+        let wakeLock = null;
+
         async function requestWakeLock() {
             try {
-                if ('wakeLock' in navigator) await navigator.wakeLock.request('screen');
-            } catch (err) { console.log("Wake Lock error:", err); }
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    // console.log('Screen Wake Lock active');
+                }
+            } catch (err) {
+                console.log(`${err.name}, ${err.message}`);
+            }
         }
+
+        // IMPORTANT: Re-request lock when app becomes visible again
+        // (Browsers drop the lock automatically when you switch tabs/apps)
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
 
         async function downloadAllForOffline() {
             const statusDiv = document.getElementById('downloadStatus');
@@ -906,6 +922,9 @@
         // 1. Check LocalStorage. If null (first visit), default to TRUE.
         const savedSetting = localStorage.getItem('isAutoMode');
         const savedAuto = savedSetting === null ? true : (savedSetting === 'true');
+
+        // Start the Wake Lock immediately
+        requestWakeLock();
         
         // 2. Apply Setting
         document.getElementById('autoToggle').checked = savedAuto;
