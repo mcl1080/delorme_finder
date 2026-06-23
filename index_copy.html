@@ -792,7 +792,7 @@
                 }
             });
 
-            // Now for each collection, display matched pages and nearest info
+            // Now for each collection, display matched pages and always show nearest info
             gridCollections.forEach(collection => {
                 const gridName = collection.name;
                 const gridData = collection.data || [];
@@ -805,63 +805,67 @@
                             <div class="page-value">${pageName}</div>
                         `;
                     });
-                } else {
-                    // No match, so find and display nearest
-                    if (gridData.length === 0) return;
+                }
+                
+                // Always find and display nearest (even if we have a match)
+                if (gridData.length === 0) return;
 
-                    let best = null;
-                    for (let i = 0; i < gridData.length; i++) {
-                        const entry = gridData[i];
-                        
-                        // Check if current location is inside this entry
-                        const minLat = Math.min(entry[0], entry[1]);
-                        const maxLat = Math.max(entry[0], entry[1]);
-                        const minLon = Math.min(entry[2], entry[3]);
-                        const maxLon = Math.max(entry[2], entry[3]);
-                        
-                        let isInside = (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon);
-                        
-                        // If we're inside the bounding box, check polygon too
-                        if (isInside && entry[5] && Array.isArray(entry[5])) {
-                            isInside = isPointInPolygon(lat, lon, entry[5]);
-                        }
-                        
-                        // Skip entries we're currently inside
-                        if (isInside) continue;
-                        
-                        // Find closest point on the zone boundary
-                        let closestLat, closestLon, d;
-                        
-                        if (entry[5] && Array.isArray(entry[5]) && entry[5].length > 0) {
-                            // Use polygon boundary
-                            const closest = closestPointOnPolygon(lat, lon, entry[5]);
-                            closestLat = closest.lat;
-                            closestLon = closest.lon;
-                            d = haversineDistance(lat, lon, closestLat, closestLon);
-                        } else {
-                            // Fallback to bounding box edge
-                            closestLat = Math.max(minLat, Math.min(lat, maxLat));
-                            closestLon = Math.max(minLon, Math.min(lon, maxLon));
-                            d = haversineDistance(lat, lon, closestLat, closestLon);
-                        }
-                        
-                        if (!best || d < best.dist) {
-                            best = { entry, dist: d, lat: closestLat, lon: closestLon };
-                        }
+                let best = null;
+                for (let i = 0; i < gridData.length; i++) {
+                    const entry = gridData[i];
+                    
+                    // Check if current location is inside this entry
+                    const minLat = Math.min(entry[0], entry[1]);
+                    const maxLat = Math.max(entry[0], entry[1]);
+                    const minLon = Math.min(entry[2], entry[3]);
+                    const maxLon = Math.max(entry[2], entry[3]);
+                    
+                    let isInside = (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon);
+                    
+                    // If we're inside the bounding box, check polygon too
+                    if (isInside && entry[5] && Array.isArray(entry[5])) {
+                        isInside = isPointInPolygon(lat, lon, entry[5]);
                     }
-
-                    if (best) {
-                        const pageName = best.entry[4] || 'unknown';
-                        const distMeters = best.dist;
-                        const distText = distMeters >= 1000 ? (distMeters/1000).toFixed(1) + ' km' : Math.round(distMeters) + ' m';
-                        const bearingDeg = bearingDegrees(lat, lon, best.lat, best.lon);
-                        const dir = degreesToCompass(bearingDeg);
-
-                        html += `
-                            <div class="grid-label">${gridName}</div>
-                            <div class="nearest-info">Nearest: ${pageName} — ${distText} ${dir}</div>
-                        `;
+                    
+                    // Skip entries we're currently inside
+                    if (isInside) continue;
+                    
+                    // Find closest point on the zone boundary
+                    let closestLat, closestLon, d;
+                    
+                    if (entry[5] && Array.isArray(entry[5]) && entry[5].length > 0) {
+                        // Use polygon boundary
+                        const closest = closestPointOnPolygon(lat, lon, entry[5]);
+                        closestLat = closest.lat;
+                        closestLon = closest.lon;
+                        d = haversineDistance(lat, lon, closestLat, closestLon);
+                    } else {
+                        // Fallback to bounding box edge
+                        closestLat = Math.max(minLat, Math.min(lat, maxLat));
+                        closestLon = Math.max(minLon, Math.min(lon, maxLon));
+                        d = haversineDistance(lat, lon, closestLat, closestLon);
                     }
+                    
+                    if (!best || d < best.dist) {
+                        best = { entry, dist: d, lat: closestLat, lon: closestLon };
+                    }
+                }
+
+                if (best) {
+                    const pageName = best.entry[4] || 'unknown';
+                    const distMeters = best.dist;
+                    const distText = distMeters >= 1000 ? (distMeters/1000).toFixed(1) + ' km' : Math.round(distMeters) + ' m';
+                    const bearingDeg = bearingDegrees(lat, lon, best.lat, best.lon);
+                    const dir = degreesToCompass(bearingDeg);
+
+                    html += `
+                        <div class="nearest-info">Nearest: ${pageName} — ${distText} ${dir}</div>
+                    `;
+                } else if (!matches[gridName] || matches[gridName].length === 0) {
+                    // Only show "No areas available" if no match AND no nearest found
+                    html += `
+                        <div class="nearest-info">No areas available</div>
+                    `;
                 }
             });
 
