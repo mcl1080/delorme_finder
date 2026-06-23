@@ -806,26 +806,30 @@
                 let best = null;
                 for (let i = 0; i < gridData.length; i++) {
                     const entry = gridData[i];
-                    // compute approximate centroid for the entry
-                    let cLat, cLon;
-                    if (entry[5] && Array.isArray(entry[5]) && entry[5].length > 0) {
-                        // polygon coords: each item [lat, lon] or [x,y] depending on source
-                        let sumLat = 0, sumLon = 0;
-                        entry[5].forEach(pt => { sumLat += pt[0]; sumLon += pt[1]; });
-                        cLat = sumLat / entry[5].length;
-                        cLon = sumLon / entry[5].length;
-                    } else {
-                        const minLat = Math.min(entry[0], entry[1]);
-                        const maxLat = Math.max(entry[0], entry[1]);
-                        const minLon = Math.min(entry[2], entry[3]);
-                        const maxLon = Math.max(entry[2], entry[3]);
-                        cLat = (minLat + maxLat) / 2;
-                        cLon = (minLon + maxLon) / 2;
+                    
+                    // Check if current location is inside this entry
+                    const minLat = Math.min(entry[0], entry[1]);
+                    const maxLat = Math.max(entry[0], entry[1]);
+                    const minLon = Math.min(entry[2], entry[3]);
+                    const maxLon = Math.max(entry[2], entry[3]);
+                    
+                    let isInside = (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon);
+                    
+                    // If we're inside the bounding box, check polygon too
+                    if (isInside && entry[5] && Array.isArray(entry[5])) {
+                        isInside = isPointInPolygon(lat, lon, entry[5]);
                     }
+                    
+                    // Skip entries we're currently inside
+                    if (isInside) continue;
+                    
+                    // Find closest point on the bounding box edge
+                    const closestLat = Math.max(minLat, Math.min(lat, maxLat));
+                    const closestLon = Math.max(minLon, Math.min(lon, maxLon));
 
-                    const d = haversineDistance(lat, lon, cLat, cLon);
+                    const d = haversineDistance(lat, lon, closestLat, closestLon);
                     if (!best || d < best.dist) {
-                        best = { entry, dist: d, lat: cLat, lon: cLon };
+                        best = { entry, dist: d, lat: closestLat, lon: closestLon };
                     }
                 }
 
@@ -890,8 +894,8 @@
             const y = Math.sin(dLon) * Math.cos(phi2);
             const x = Math.cos(phi1)*Math.sin(phi2) - Math.sin(phi1)*Math.cos(phi2)*Math.cos(dLon);
             let theta = toDeg(Math.atan2(y, x));
-            // Convert to compass bearing: 0 = North
-            theta = (theta + 360 + 90) % 360; // rotate so 0 = North
+            // Convert to compass bearing: 0 = North, 90 = East
+            theta = (90 - theta + 360) % 360;
             return theta;
         }
 
