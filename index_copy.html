@@ -823,11 +823,22 @@
                     // Skip entries we're currently inside
                     if (isInside) continue;
                     
-                    // Find closest point on the bounding box edge
-                    const closestLat = Math.max(minLat, Math.min(lat, maxLat));
-                    const closestLon = Math.max(minLon, Math.min(lon, maxLon));
-
-                    const d = haversineDistance(lat, lon, closestLat, closestLon);
+                    // Find closest point on the zone boundary
+                    let closestLat, closestLon, d;
+                    
+                    if (entry[5] && Array.isArray(entry[5]) && entry[5].length > 0) {
+                        // Use polygon boundary
+                        const closest = closestPointOnPolygon(lat, lon, entry[5]);
+                        closestLat = closest.lat;
+                        closestLon = closest.lon;
+                        d = haversineDistance(lat, lon, closestLat, closestLon);
+                    } else {
+                        // Fallback to bounding box edge
+                        closestLat = Math.max(minLat, Math.min(lat, maxLat));
+                        closestLon = Math.max(minLon, Math.min(lon, maxLon));
+                        d = haversineDistance(lat, lon, closestLat, closestLon);
+                    }
+                    
                     if (!best || d < best.dist) {
                         best = { entry, dist: d, lat: closestLat, lon: closestLon };
                     }
@@ -884,25 +895,59 @@
             return R * c;
         }
 
-        // Bearing from point A to B in degrees (0 = North)
+        // Bearing from point A to B in degrees (0 = North, 90 = East, 180 = South, 270 = West)
         function bearingDegrees(lat1, lon1, lat2, lon2) {
             const toRad = x => x * Math.PI / 180;
             const toDeg = x => x * 180 / Math.PI;
-            const phi1 = toRad(lat1);
-            const phi2 = toRad(lat2);
             const dLon = toRad(lon2 - lon1);
-            const y = Math.sin(dLon) * Math.cos(phi2);
-            const x = Math.cos(phi1)*Math.sin(phi2) - Math.sin(phi1)*Math.cos(phi2)*Math.cos(dLon);
-            let theta = toDeg(Math.atan2(y, x));
-            // Convert to compass bearing: 0 = North, 90 = East
-            theta = (90 - theta + 360) % 360;
-            return theta;
+            const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+            const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+            return (toDeg(Math.atan2(y, x)) + 360) % 360;
         }
 
         function degreesToCompass(deg) {
             const directions = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
             const idx = Math.round((deg % 360) / 22.5);
             return directions[idx];
+        }
+
+        // Find closest point on a polygon boundary to a given lat/lon
+        function closestPointOnPolygon(lat, lon, polygon) {
+            let closest = null;
+            let minDist = Infinity;
+
+            for (let i = 0; i < polygon.length; i++) {
+                const p1 = polygon[i];
+                const p2 = polygon[(i + 1) % polygon.length];
+                
+                // Find closest point on this edge
+                const pt = closestPointOnSegment(lat, lon, p1[0], p1[1], p2[0], p2[1]);
+                const d = haversineDistance(lat, lon, pt.lat, pt.lon);
+                
+                if (d < minDist) {
+                    minDist = d;
+                    closest = pt;
+                }
+            }
+
+            return closest || { lat: polygon[0][0], lon: polygon[0][1] };
+        }
+
+        // Find closest point on a line segment to a given point
+        function closestPointOnSegment(lat, lon, lat1, lon1, lat2, lon2) {
+            // Use simple lat/lon arithmetic (works for small distances)
+            const dx = lon2 - lon1;
+            const dy = lat2 - lat1;
+            
+            if (dx === 0 && dy === 0) {
+                return { lat: lat1, lon: lon1 };
+            }
+            
+            const t = Math.max(0, Math.min(1, ((lon - lon1) * dx + (lat - lat1) * dy) / (dx * dx + dy * dy)));
+            return {
+                lat: lat1 + t * dy,
+                lon: lon1 + t * dx
+            };
         }
         
         function toDDM(val, isLat) {
