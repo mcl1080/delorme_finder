@@ -764,20 +764,13 @@
         function findPages(lat, lon) {
             const resultDiv = document.getElementById('resultContainer');
             let html = "";
-            let matchesFound = false;
-
-            // Build a map of collections for easy lookup
-            const collectionMap = {};
-            gridCollections.forEach(collection => {
-                collectionMap[collection.name] = collection;
-            });
 
             // Find all matches first
             const matches = {};
-            gridCollections.forEach(collection => {
+            gridCollections.forEach((collection, collIndex) => {
                 const gridName = collection.name;
                 const gridData = collection.data;
-                matches[gridName] = [];
+                matches[collIndex] = [];
 
                 for (let i = 0; i < gridData.length; i++) {
                     const entry = gridData[i];
@@ -800,15 +793,14 @@
 
                         if (isMatch) {
                             const pageName = entry[4];
-                            matches[gridName].push(pageName);
-                            matchesFound = true;
+                            matches[collIndex].push(pageName);
                         }
                     }
                 }
             });
 
             // Now for each collection, display matched pages and always show nearest info
-            gridCollections.forEach(collection => {
+            gridCollections.forEach((collection, collIndex) => {
                 const gridName = collection.name;
                 const gridData = collection.data || [];
                 
@@ -816,8 +808,8 @@
                 html += `<div class="grid-label">${gridName}</div>`;
                 
                 // Display any matched pages
-                if (matches[gridName] && matches[gridName].length > 0) {
-                    matches[gridName].forEach(pageName => {
+                if (matches[collIndex] && matches[collIndex].length > 0) {
+                    matches[collIndex].forEach(pageName => {
                         html += `<div class="page-value">${pageName}</div>`;
                     });
                 }
@@ -883,7 +875,7 @@
                     html += `
                         <div class="nearest-info">Nearest: ${pageName} — ${distText} ${dir}</div>
                     `;
-                } else if (!matches[gridName] || matches[gridName].length === 0) {
+                } else if (!matches[collIndex] || matches[collIndex].length === 0) {
                     // Only show "No areas available" if no match AND no nearest found
                     html += `
                         <div class="nearest-info">No areas available</div>
