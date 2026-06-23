@@ -28,6 +28,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         h1 { margin: 0; font-size: 1.2rem; color: #bb86fc; }
@@ -67,6 +74,9 @@
             justify-content: flex-start;
             padding: 10px 0 60px 0;
             width: 100%;
+            margin-top: 160px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .coords-box {
@@ -80,6 +90,11 @@
             border-radius: 8px;
             width: 90%;
             border: 1px solid #333;
+            position: fixed;
+            top: 65px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99;
         }
 
         .result-box {
@@ -87,7 +102,7 @@
             text-align: center;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             flex-grow: 1;
         }
 
@@ -285,6 +300,12 @@
             text-align: center;
             color: #888;
             font-style: italic;
+        }
+
+        .nearest-info {
+            color: #03dac6;
+            font-size: 1rem;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -742,12 +763,21 @@
 
         function findPages(lat, lon) {
             const resultDiv = document.getElementById('resultContainer');
-            let foundHtml = "";
+            let html = "";
             let matchesFound = false;
 
+            // Build a map of collections for easy lookup
+            const collectionMap = {};
+            gridCollections.forEach(collection => {
+                collectionMap[collection.name] = collection;
+            });
+
+            // Find all matches first
+            const matches = {};
             gridCollections.forEach(collection => {
                 const gridName = collection.name;
                 const gridData = collection.data;
+                matches[gridName] = [];
 
                 for (let i = 0; i < gridData.length; i++) {
                     const entry = gridData[i];
@@ -770,18 +800,99 @@
 
                         if (isMatch) {
                             const pageName = entry[4];
-                            foundHtml += `
-                                <div class="grid-label">${gridName}</div>
-                                <div class="page-value">${pageName}</div>
-                            `;
+                            matches[gridName].push(pageName);
                             matchesFound = true;
                         }
                     }
                 }
             });
 
-            if (matchesFound) {
-                resultDiv.innerHTML = foundHtml;
+            // Now for each collection, display matched pages and always show nearest info
+            gridCollections.forEach(collection => {
+                const gridName = collection.name;
+                const gridData = collection.data || [];
+                
+                // Always show the label first
+                html += `<div class="grid-label">${gridName}</div>`;
+                
+                // Display any matched pages
+                if (matches[gridName] && matches[gridName].length > 0) {
+                    matches[gridName].forEach(pageName => {
+                        html += `<div class="page-value">${pageName}</div>`;
+                    });
+                }
+                
+                // Always find and display nearest (even if we have a match)
+                if (gridData.length === 0) return;
+
+                let best = null;
+                for (let i = 0; i < gridData.length; i++) {
+                    const entry = gridData[i];
+                    
+                    // Check if current location is inside this entry
+                    const minLat = Math.min(entry[0], entry[1]);
+                    const maxLat = Math.max(entry[0], entry[1]);
+                    const minLon = Math.min(entry[2], entry[3]);
+                    const maxLon = Math.max(entry[2], entry[3]);
+                    
+                    let isInside = (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon);
+                    
+                    // If we're inside the bounding box, check polygon too
+                    if (isInside && entry[5] && Array.isArray(entry[5])) {
+                        isInside = isPointInPolygon(lat, lon, entry[5]);
+                    }
+                    
+                    // Skip entries we're currently inside
+                    if (isInside) continue;
+                    
+                    // Find closest point on the zone boundary
+                    let closestLat, closestLon, d;
+                    
+                    if (entry[5] && Array.isArray(entry[5]) && entry[5].length > 0) {
+                        // Use polygon boundary
+                        const closest = closestPointOnPolygon(lat, lon, entry[5]);
+                        closestLat = closest.lat;
+                        closestLon = closest.lon;
+                        d = haversineDistance(lat, lon, closestLat, closestLon);
+                    } else {
+                        // Fallback to bounding box edge
+                        closestLat = Math.max(minLat, Math.min(lat, maxLat));
+                        closestLon = Math.max(minLon, Math.min(lon, maxLon));
+                        d = haversineDistance(lat, lon, closestLat, closestLon);
+                    }
+                    
+                    if (!best || d < best.dist) {
+                        best = { entry, dist: d, lat: closestLat, lon: closestLon };
+                    }
+                }
+
+                if (best) {
+                    const pageName = best.entry[4] || 'unknown';
+                    const distMeters = best.dist;
+                    let distText;
+                    if (distMeters < 1609.34) {
+                        const feet = distMeters * 3.28084;
+                        distText = Math.round(feet) + ' ft';
+                    } else {
+                        const miles = distMeters / 1609.34;
+                        distText = miles.toFixed(1) + ' mi';
+                    }
+                    const bearingDeg = bearingDegrees(lat, lon, best.lat, best.lon);
+                    const dir = degreesToCompass(bearingDeg);
+
+                    html += `
+                        <div class="nearest-info">Nearest: ${pageName} — ${distText} ${dir}</div>
+                    `;
+                } else if (!matches[gridName] || matches[gridName].length === 0) {
+                    // Only show "No areas available" if no match AND no nearest found
+                    html += `
+                        <div class="nearest-info">No areas available</div>
+                    `;
+                }
+            });
+
+            if (html.length > 0) {
+                resultDiv.innerHTML = html;
             } else {
                 resultDiv.innerHTML = '<span style="font-size: 1.5rem; color: #555;">No Page Found</span>';
             }
@@ -800,6 +911,74 @@
                 if (intersect) inside = !inside;
             }
             return inside;
+        }
+
+        // Haversine distance in meters
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // meters
+            const toRad = x => x * Math.PI / 180;
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Bearing from point A to B in degrees (0 = North, 90 = East, 180 = South, 270 = West)
+        function bearingDegrees(lat1, lon1, lat2, lon2) {
+            const toRad = x => x * Math.PI / 180;
+            const toDeg = x => x * 180 / Math.PI;
+            const dLon = toRad(lon2 - lon1);
+            const y = Math.sin(dLon) * Math.cos(toRad(lat2));
+            const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLon);
+            return (toDeg(Math.atan2(y, x)) + 360) % 360;
+        }
+
+        function degreesToCompass(deg) {
+            const directions = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW','N'];
+            const idx = Math.round((deg % 360) / 22.5);
+            return directions[idx];
+        }
+
+        // Find closest point on a polygon boundary to a given lat/lon
+        function closestPointOnPolygon(lat, lon, polygon) {
+            let closest = null;
+            let minDist = Infinity;
+
+            for (let i = 0; i < polygon.length; i++) {
+                const p1 = polygon[i];
+                const p2 = polygon[(i + 1) % polygon.length];
+                
+                // Find closest point on this edge
+                const pt = closestPointOnSegment(lat, lon, p1[0], p1[1], p2[0], p2[1]);
+                const d = haversineDistance(lat, lon, pt.lat, pt.lon);
+                
+                if (d < minDist) {
+                    minDist = d;
+                    closest = pt;
+                }
+            }
+
+            return closest || { lat: polygon[0][0], lon: polygon[0][1] };
+        }
+
+        // Find closest point on a line segment to a given point
+        function closestPointOnSegment(lat, lon, lat1, lon1, lat2, lon2) {
+            // Use simple lat/lon arithmetic (works for small distances)
+            const dx = lon2 - lon1;
+            const dy = lat2 - lat1;
+            
+            if (dx === 0 && dy === 0) {
+                return { lat: lat1, lon: lon1 };
+            }
+            
+            const t = Math.max(0, Math.min(1, ((lon - lon1) * dx + (lat - lat1) * dy) / (dx * dx + dy * dy)));
+            return {
+                lat: lat1 + t * dy,
+                lon: lon1 + t * dx
+            };
         }
         
         function toDDM(val, isLat) {
