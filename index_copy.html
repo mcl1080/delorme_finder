@@ -797,13 +797,13 @@
                 const gridName = collection.name;
                 const gridData = collection.data || [];
                 
+                // Always show the label first
+                html += `<div class="grid-label">${gridName}</div>`;
+                
                 // Display any matched pages
                 if (matches[gridName] && matches[gridName].length > 0) {
                     matches[gridName].forEach(pageName => {
-                        html += `
-                            <div class="grid-label">${gridName}</div>
-                            <div class="page-value">${pageName}</div>
-                        `;
+                        html += `<div class="page-value">${pageName}</div>`;
                     });
                 }
                 
