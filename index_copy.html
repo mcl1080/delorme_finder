@@ -28,6 +28,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         h1 { margin: 0; font-size: 1.2rem; color: #bb86fc; }
@@ -67,6 +74,9 @@
             justify-content: flex-start;
             padding: 10px 0 60px 0;
             width: 100%;
+            margin-top: 160px;
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .coords-box {
@@ -80,6 +90,11 @@
             border-radius: 8px;
             width: 90%;
             border: 1px solid #333;
+            position: fixed;
+            top: 65px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 99;
         }
 
         .result-box {
@@ -87,7 +102,7 @@
             text-align: center;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            justify-content: flex-start;
             flex-grow: 1;
         }
 
@@ -854,7 +869,14 @@
                 if (best) {
                     const pageName = best.entry[4] || 'unknown';
                     const distMeters = best.dist;
-                    const distText = distMeters >= 1000 ? (distMeters/1000).toFixed(1) + ' km' : Math.round(distMeters) + ' m';
+                    let distText;
+                    if (distMeters < 1609.34) {
+                        const feet = distMeters * 3.28084;
+                        distText = Math.round(feet) + ' ft';
+                    } else {
+                        const miles = distMeters / 1609.34;
+                        distText = miles.toFixed(1) + ' mi';
+                    }
                     const bearingDeg = bearingDegrees(lat, lon, best.lat, best.lon);
                     const dir = degreesToCompass(bearingDeg);
 
